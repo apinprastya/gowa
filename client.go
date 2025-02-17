@@ -3,6 +3,8 @@ package gowa
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/apinprastya/gowa/jscode"
@@ -18,24 +20,30 @@ const (
 )
 
 type ClientCallback interface {
+	OnNeedLogin()
 	OnReady()
 	OnLogoutEvent()
 	OnMessageAck(messageID string, messageAck MessageAck)
 }
 
 type Client struct {
+	id          string
 	pw          *playwright.Playwright
 	page        playwright.Page
 	browserType BrowserType
 	callback    ClientCallback
 	loggedIn    bool
+	hasSynced   bool
+	browser     playwright.BrowserContext
 }
 
-func New(browserType BrowserType, callback ClientCallback) *Client {
+func New(id string, browserType BrowserType, callback ClientCallback) *Client {
 	return &Client{
+		id:          id,
 		browserType: browserType,
 		callback:    callback,
 		loggedIn:    false,
+		hasSynced:   false,
 	}
 }
 
@@ -51,25 +59,31 @@ func (c *Client) Init() error {
 	c.pw = pw
 	var browser playwright.BrowserContext
 
+	userCacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	fmt.Println("user cache dir: ", userCacheDir)
+
 	switch c.browserType {
 	case BrowserTypeFirefox:
-		browser, err = pw.Firefox.LaunchPersistentContext("/home/apin/project/go/gowa/.local", playwright.BrowserTypeLaunchPersistentContextOptions{
-			Headless: playwright.Bool(false),
-			Timeout:  playwright.Float(30000),
+		browser, err = pw.Firefox.LaunchPersistentContext(path.Join(userCacheDir, "gowa_firefox", c.id), playwright.BrowserTypeLaunchPersistentContextOptions{
+			//Headless: playwright.Bool(false),
+			Timeout: playwright.Float(30000),
 		})
 		if err != nil {
 			return err
 		}
 	case BrowserTypeChromium:
-		browser, err = pw.Chromium.LaunchPersistentContext("/home/apin/project/go/gowa/.local_chromium", playwright.BrowserTypeLaunchPersistentContextOptions{
-			Headless: playwright.Bool(false),
-			Timeout:  playwright.Float(30000),
-			Args:     []string{"--disable-blink-features=AutomationControlled"},
+		browser, err = pw.Chromium.LaunchPersistentContext(path.Join(userCacheDir, "gowa_chromium", c.id), playwright.BrowserTypeLaunchPersistentContextOptions{
+			//Headless: playwright.Bool(false),
+			Timeout: playwright.Float(30000),
 		})
 		if err != nil {
 			return err
 		}
 	}
+	c.browser = browser
 	if len(browser.Pages()) > 0 {
 		c.page = browser.Pages()[0]
 	}
@@ -90,27 +104,9 @@ func (c *Client) Init() error {
 		return err
 	}
 	c.loggedIn = !needLogin
-	/*if needLogin {
-		err = c.page.ExposeFunction("onQRChangedEvent", func(args ...interface{}) interface{} {
-			if len(args) > 0 {
-				if str, ok := args[0].(string); ok {
-					if c.callback != nil {
-						c.callback.OnQRChangedEvent(str)
-					}
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		_, err = c.page.Evaluate(QrJS)
-		if err != nil {
-			return err
-		}
-	}*/
 
 	err = c.page.ExposeFunction("onLogoutEvent", func(args ...interface{}) interface{} {
+		c.loggedIn = false
 		if c.callback != nil {
 			c.callback.OnLogoutEvent()
 		}
@@ -128,6 +124,10 @@ func (c *Client) Init() error {
 	}
 
 	err = c.page.ExposeFunction("onAppStateHasSyncedEvent", func(args ...interface{}) interface{} {
+		if c.hasSynced {
+			return nil
+		}
+		c.hasSynced = true
 		c.loggedIn = true
 		_, err := c.page.Evaluate(jscode.StoreJS)
 		if err != nil {
@@ -157,9 +157,14 @@ func (c *Client) Init() error {
 		return err
 	}
 
+	if needLogin {
+		if c.callback != nil {
+			c.callback.OnNeedLogin()
+		}
+	}
+
 	err = c.page.ExposeFunction("onMessageAckEvent", func(args ...interface{}) interface{} {
 		if len(args) >= 2 {
-			fmt.Println(args)
 			if id, ok := args[0].(string); ok {
 				if ack, ok := args[1].(int); ok {
 					if c.callback != nil {
@@ -223,9 +228,15 @@ func (c *Client) Close() {
 	if c.page != nil {
 		c.page.Close()
 	}
+	if c.browser != nil {
+		c.browser.Close()
+	}
 	if c.pw != nil {
 		c.pw.Stop()
 	}
+	c.hasSynced = false
+	c.page = nil
+	c.pw = nil
 }
 
 func (c *Client) needLogin() (bool, error) {
@@ -244,7 +255,7 @@ func (c *Client) formatPhoneNumber(phone string) string {
 		phone = strings.ReplaceAll(phone, "c.us", "s.whatsapp.net")
 	}
 	if !strings.HasSuffix(phone, "@s.whatsapp.net") {
-		phone = phone + "s.whatsapp.net"
+		phone = phone + "@s.whatsapp.net"
 	}
 	return phone
 }
