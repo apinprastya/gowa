@@ -1,13 +1,12 @@
 package gowa
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/apinprastya/gowa/jscode"
 	"github.com/playwright-community/playwright-go"
-	"github.com/valyala/fastjson"
 )
 
 type BrowserType int
@@ -21,6 +20,7 @@ const (
 type ClientCallback interface {
 	OnReady()
 	OnLogoutEvent()
+	OnMessageAck(messageID string, messageAck MessageAck)
 }
 
 type Client struct {
@@ -37,6 +37,10 @@ func New(browserType BrowserType, callback ClientCallback) *Client {
 		callback:    callback,
 		loggedIn:    false,
 	}
+}
+
+func (c *Client) IsLoggedIn() bool {
+	return c.loggedIn
 }
 
 func (c *Client) Init() error {
@@ -76,7 +80,7 @@ func (c *Client) Init() error {
 		return err
 	}
 
-	_, err = c.page.Evaluate(InjectAuthJS)
+	_, err = c.page.Evaluate(jscode.InjectAuthJS)
 	if err != nil {
 		return err
 	}
@@ -117,10 +121,6 @@ func (c *Client) Init() error {
 	}
 
 	err = c.page.ExposeFunction("onAuthAppStateChangedEvent", func(args ...interface{}) interface{} {
-		fmt.Println("onAuthAppStateChangedEvent")
-		for i := range args {
-			fmt.Println(args[i])
-		}
 		return nil
 	})
 	if err != nil {
@@ -128,14 +128,21 @@ func (c *Client) Init() error {
 	}
 
 	err = c.page.ExposeFunction("onAppStateHasSyncedEvent", func(args ...interface{}) interface{} {
-		_, err := c.page.Evaluate(StoreJS)
+		c.loggedIn = true
+		_, err := c.page.Evaluate(jscode.StoreJS)
 		if err != nil {
 			return nil
 		}
-		_, err = c.page.Evaluate(UtilJS)
+		_, err = c.page.Evaluate(jscode.UtilJS)
 		if err != nil {
 			return nil
 		}
+
+		_, err = c.page.Evaluate(jscode.MessageEventJS)
+		if err != nil {
+			return nil
+		}
+
 		if c.callback != nil {
 			c.callback.OnReady()
 		}
@@ -145,7 +152,24 @@ func (c *Client) Init() error {
 		return err
 	}
 
-	_, err = c.page.Evaluate(StateChangeJS)
+	_, err = c.page.Evaluate(jscode.StateChangeJS)
+	if err != nil {
+		return err
+	}
+
+	err = c.page.ExposeFunction("onMessageAckEvent", func(args ...interface{}) interface{} {
+		if len(args) >= 2 {
+			fmt.Println(args)
+			if id, ok := args[0].(string); ok {
+				if ack, ok := args[1].(int); ok {
+					if c.callback != nil {
+						c.callback.OnMessageAck(id, MessageAck(ack))
+					}
+				}
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
@@ -154,7 +178,7 @@ func (c *Client) Init() error {
 }
 
 func (c *Client) RequestPairingCode(phone string) (string, error) {
-	val, err := c.page.Evaluate(RequestPairCodeJS, phone)
+	val, err := c.page.Evaluate(jscode.RequestPairCodeJS, phone)
 	if err != nil {
 		return "", err
 	}
@@ -165,7 +189,7 @@ func (c *Client) RequestPairingCode(phone string) (string, error) {
 }
 
 func (c *Client) SendMessage(phone string, message Message) (string, error) {
-	result, err := c.page.Evaluate(SendMessageJS, map[string]any{
+	result, err := c.page.Evaluate(jscode.SendMessageJS, map[string]any{
 		"chatId":  c.formatPhoneNumber(phone),
 		"message": message.Content(),
 		"options": message.Option(),
@@ -173,16 +197,11 @@ func (c *Client) SendMessage(phone string, message Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jsonResult, _ := json.Marshal(result)
-	var p fastjson.Parser
-	v, _ := p.ParseBytes(jsonResult)
-	obj := v.GetObject("id")
-	var id string
-	if obj != nil {
-		id = obj.Get("id").String()
+	if id, ok := result.(string); ok {
+		return id, nil
 	}
 
-	return id, nil
+	return "", errors.New("invalid return value")
 }
 
 func (c *Client) runOrInstall() (*playwright.Playwright, error) {
@@ -210,7 +229,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) needLogin() (bool, error) {
-	needAuthInt, err := c.page.Evaluate(NeedAuthJS)
+	needAuthInt, err := c.page.Evaluate(jscode.NeedAuthJS)
 	if err != nil {
 		return false, err
 	}

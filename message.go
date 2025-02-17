@@ -1,5 +1,16 @@
 package gowa
 
+type MessageAck int
+
+const (
+	MessageAckError   MessageAck = -1
+	MessageAckPending MessageAck = 0
+	MessageAckServer  MessageAck = 1
+	MessageAckDevice  MessageAck = 2
+	MessageAckRead    MessageAck = 3
+	MessageAckPlayed  MessageAck = 4
+)
+
 type Message interface {
 	Content() string
 	Option() map[string]any
