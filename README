@@ -1,0 +1,8 @@
+# GOWA
+Sending whatsapp message from golang
+This project is only use to send message. I have no plan to make it feature rich (only implement what I need).
+Most of JS script on this project was taken from [whatsapp-web.js](https://wwebjs.dev/). If you need feature rich please use the `whatsapp-web.js` directly. Any code from `whatsapp-web.js` will remain license under `whatsapp-web.js`.
+
+## Example
+
+Please go to `example/sample01/main.go` for how to use this library.
