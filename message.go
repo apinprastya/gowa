@@ -42,7 +42,7 @@ func (m *MessageMedia) Content() string {
 func (m *MessageMedia) Option() map[string]any {
 	return map[string]any{
 		"caption": m.Caption,
-		"attachment": map[string]any{
+		"media": map[string]any{
 			"mimetype": m.MimeType,
 			"filename": m.Filename,
 			"data":     m.Data,

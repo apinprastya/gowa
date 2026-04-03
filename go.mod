@@ -1,6 +1,6 @@
 module github.com/apinprastya/gowa
 
-go 1.23.3
+go 1.26.0
 
 require github.com/playwright-community/playwright-go v0.5001.0
 

@@ -202,11 +202,16 @@ func (c *Client) SendMessage(phone string, message Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if id, ok := result.(string); ok {
-		return id, nil
+
+	if resultMap, ok := result.(map[string]any); ok {
+		if idMap, ok := resultMap["id"].(map[string]any); ok {
+			if id, ok := idMap["id"].(string); ok {
+				return id, nil
+			}
+		}
 	}
 
-	return "", errors.New("invalid return value")
+	return "", nil
 }
 
 func (c *Client) runOrInstall() (*playwright.Playwright, error) {

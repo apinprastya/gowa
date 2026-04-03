@@ -104,6 +104,7 @@ func (c *Cb) doInput() {
 			MimeType: mimetype,
 			Caption:  caption,
 			Data:     base64Str,
+			Filename: "name.pdf",
 		})
 		if err != nil {
 			fmt.Println("Error send message", err)

@@ -1,9 +1,15 @@
 package jscode
 
 const SendMessageJS = `async (message) => {
-	const chatWid = window.Store.WidFactory.createWid(message.chatId);
-	const chat = await window.Store.Chat.find(chatWid);
+	const chat = await window.WWebJS.getChat(message.chatId, {getAsModel: false});
 
-	const msg = await window.WWebJS.sendMessage(chat, message.message, message.options, false);
-	return window.WWebJS.getMessageModel(msg).id.id;
+	if (!chat) return null;
+
+	const msg = await window.WWebJS.sendMessage(
+                    chat,
+                    message.message, 
+					message.options,
+                );
+				
+	return msg ? window.WWebJS.getMessageModel(msg) : undefined;
 };`
