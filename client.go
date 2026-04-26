@@ -129,10 +129,6 @@ func (c *Client) Init() error {
 		}
 		c.hasSynced = true
 		c.loggedIn = true
-		_, err := c.page.Evaluate(jscode.StoreJS)
-		if err != nil {
-			return nil
-		}
 		_, err = c.page.Evaluate(jscode.UtilJS)
 		if err != nil {
 			return nil
