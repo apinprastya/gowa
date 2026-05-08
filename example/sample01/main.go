@@ -24,7 +24,7 @@ func ReadFileToBase64(filePath string) (string, error) {
 }
 
 type Cb struct {
-	client *gowa.Client
+	client gowa.Client
 }
 
 func (c *Cb) OnLogoutEvent() {
