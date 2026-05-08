@@ -26,7 +26,16 @@ type ClientCallback interface {
 	OnMessageAck(messageID string, messageAck MessageAck)
 }
 
-type Client struct {
+type Client interface {
+	IsLoggedIn() bool
+	Init() error
+	RequestPairingCode(phone string) (string, error)
+	SendMessage(phone string, message Message) (string, error)
+	Close()
+	Logout() error
+}
+
+type client struct {
 	id          string
 	pw          *playwright.Playwright
 	page        playwright.Page
@@ -37,8 +46,8 @@ type Client struct {
 	browser     playwright.BrowserContext
 }
 
-func New(id string, browserType BrowserType, callback ClientCallback) *Client {
-	return &Client{
+func New(id string, browserType BrowserType, callback ClientCallback) Client {
+	return &client{
 		id:          id,
 		browserType: browserType,
 		callback:    callback,
@@ -47,11 +56,11 @@ func New(id string, browserType BrowserType, callback ClientCallback) *Client {
 	}
 }
 
-func (c *Client) IsLoggedIn() bool {
+func (c *client) IsLoggedIn() bool {
 	return c.loggedIn
 }
 
-func (c *Client) Init() error {
+func (c *client) Init() error {
 	pw, err := c.runOrInstall()
 	if err != nil {
 		return err
@@ -178,7 +187,7 @@ func (c *Client) Init() error {
 	return nil
 }
 
-func (c *Client) RequestPairingCode(phone string) (string, error) {
+func (c *client) RequestPairingCode(phone string) (string, error) {
 	val, err := c.page.Evaluate(jscode.RequestPairCodeJS, phone)
 	if err != nil {
 		return "", err
@@ -189,7 +198,7 @@ func (c *Client) RequestPairingCode(phone string) (string, error) {
 	return "", errors.New("invalid return value")
 }
 
-func (c *Client) SendMessage(phone string, message Message) (string, error) {
+func (c *client) SendMessage(phone string, message Message) (string, error) {
 	result, err := c.page.Evaluate(jscode.SendMessageJS, map[string]any{
 		"chatId":  c.formatPhoneNumber(phone),
 		"message": message.Content(),
@@ -210,7 +219,7 @@ func (c *Client) SendMessage(phone string, message Message) (string, error) {
 	return "", nil
 }
 
-func (c *Client) runOrInstall() (*playwright.Playwright, error) {
+func (c *client) runOrInstall() (*playwright.Playwright, error) {
 	pw, err := playwright.Run()
 	if err != nil && strings.Contains(err.Error(), "please install the driver") {
 		err = playwright.Install()
@@ -225,7 +234,7 @@ func (c *Client) runOrInstall() (*playwright.Playwright, error) {
 	return pw, nil
 }
 
-func (c *Client) Close() {
+func (c *client) Close() {
 	if c.page != nil {
 		c.page.Close()
 	}
@@ -240,7 +249,7 @@ func (c *Client) Close() {
 	c.pw = nil
 }
 
-func (c *Client) needLogin() (bool, error) {
+func (c *client) needLogin() (bool, error) {
 	needAuthInt, err := c.page.Evaluate(jscode.NeedAuthJS)
 	if err != nil {
 		return false, err
@@ -251,7 +260,7 @@ func (c *Client) needLogin() (bool, error) {
 	return true, nil
 }
 
-func (c *Client) formatPhoneNumber(phone string) string {
+func (c *client) formatPhoneNumber(phone string) string {
 	if !strings.HasSuffix(phone, "@s.whatsapp.net") {
 		phone = strings.ReplaceAll(phone, "c.us", "s.whatsapp.net")
 	}
@@ -259,4 +268,9 @@ func (c *Client) formatPhoneNumber(phone string) string {
 		phone = phone + "@s.whatsapp.net"
 	}
 	return phone
+}
+
+func (c *client) Logout() error {
+	_, err := c.page.Evaluate(jscode.LogoutJS)
+	return err
 }
