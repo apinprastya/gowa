@@ -51,3 +51,7 @@ const RequestPairCodeJS = `async function(phoneNumber) {
 	await window.AuthStore.PairingCodeLinkUtils.initializeAltDeviceLinking();
 	return window.AuthStore.PairingCodeLinkUtils.startAltLinkingFlow(phoneNumber, true);
 }`
+
+const LogoutJS = `async function() {
+	await window.require('WAWebSocketModel').Socket.logout()
+}`

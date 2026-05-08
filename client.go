@@ -32,7 +32,7 @@ type Client interface {
 	RequestPairingCode(phone string) (string, error)
 	SendMessage(phone string, message Message) (string, error)
 	Close()
-	Logout()
+	Logout() error
 }
 
 type client struct {
@@ -270,6 +270,7 @@ func (c *client) formatPhoneNumber(phone string) string {
 	return phone
 }
 
-func (c *client) Logout() {
-
+func (c *client) Logout() error {
+	_, err := c.page.Evaluate(jscode.LogoutJS)
+	return err
 }

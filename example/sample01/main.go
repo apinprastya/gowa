@@ -65,6 +65,26 @@ func (c *Cb) doLogin() {
 }
 
 func (c *Cb) doInput() {
+	for {
+		action := ""
+		time.Sleep(100 * time.Millisecond)
+		fmt.Println("Input action")
+		fmt.Println("1. Send Message")
+		fmt.Println("2. Logout")
+		fmt.Scanln(&action)
+		switch action {
+		case "1":
+			c.doMessageInput()
+		case "2":
+			err := c.client.Logout()
+			fmt.Println(err)
+			c.client.Close()
+			return
+		}
+	}
+}
+
+func (c *Cb) doMessageInput() {
 	phone := ""
 	action := ""
 	time.Sleep(100 * time.Millisecond)
